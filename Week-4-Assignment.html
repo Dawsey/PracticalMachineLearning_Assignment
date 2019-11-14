@@ -719,6 +719,7 @@ Test  &lt;- train.df[-trainIndex,]</code></pre>
 </div>
 <div id="model-parameters-for-caret-models" class="section level3">
 <h3>Model Parameters for Caret Models</h3>
+<p>All of the caret models were built using the following parameters. In this case K-fold Cross Validation was used.</p>
 <pre class="r"><code>fitControl &lt;- trainControl(## 10-fold CV
                            method = &quot;cv&quot;,
                            number = 10,
@@ -730,7 +731,21 @@ Test  &lt;- train.df[-trainIndex,]</code></pre>
 mdl.lda &lt;- train(classe ~ ., data = Train, 
                  method = &quot;lda&quot;, 
                  trControl = fitControl,
-                 verbose = FALSE)</code></pre>
+                 verbose = FALSE)
+mdl.lda</code></pre>
+<pre><code>## Linear Discriminant Analysis 
+## 
+## 15699 samples
+##    31 predictor
+##     5 classes: &#39;A&#39;, &#39;B&#39;, &#39;C&#39;, &#39;D&#39;, &#39;E&#39; 
+## 
+## No pre-processing
+## Resampling: Cross-Validated (10 fold) 
+## Summary of sample sizes: 14129, 14129, 14128, 14131, 14129, 14131, ... 
+## Resampling results:
+## 
+##   Accuracy   Kappa    
+##   0.5841114  0.4733809</code></pre>
 <div id="cross-validation" class="section level4">
 <h4>Cross Validation</h4>
 <pre class="r"><code>pred.lda &lt;- predict(mdl.lda, Test)
@@ -747,16 +762,42 @@ mdl.gbm &lt;- train(classe ~ ., data = Train,
                  method = &quot;gbm&quot;, 
                  trControl = fitControl,
                  verbose = FALSE)
-# mdl.gbm</code></pre>
+mdl.gbm</code></pre>
+<pre><code>## Stochastic Gradient Boosting 
+## 
+## 15699 samples
+##    31 predictor
+##     5 classes: &#39;A&#39;, &#39;B&#39;, &#39;C&#39;, &#39;D&#39;, &#39;E&#39; 
+## 
+## No pre-processing
+## Resampling: Cross-Validated (10 fold) 
+## Summary of sample sizes: 14129, 14129, 14128, 14131, 14129, 14131, ... 
+## Resampling results across tuning parameters:
+## 
+##   interaction.depth  n.trees  Accuracy   Kappa    
+##   1                   50      0.7143777  0.6377917
+##   1                  100      0.7728532  0.7124983
+##   1                  150      0.8102432  0.7599306
+##   2                   50      0.8229184  0.7758123
+##   2                  100      0.8804368  0.8487606
+##   2                  150      0.9091016  0.8850297
+##   3                   50      0.8673170  0.8320544
+##   3                  100      0.9231792  0.9027876
+##   3                  150      0.9472569  0.9332776
+## 
+## Tuning parameter &#39;shrinkage&#39; was held constant at a value of 0.1
+## 
+## Tuning parameter &#39;n.minobsinnode&#39; was held constant at a value of 10
+## Accuracy was used to select the optimal model using the largest value.
+## The final values used for the model were n.trees = 150, interaction.depth =
+##  3, shrinkage = 0.1 and n.minobsinnode = 10.</code></pre>
 <div id="cross-validation-1" class="section level4">
 <h4>Cross Validation</h4>
 <pre class="r"><code>pred.gbm &lt;- predict(mdl.gbm, Test)
 
 pred.gbm.cm &lt;- confusionMatrix(pred.gbm, Test$classe)
 
-df.metrics.gbm &lt;- data.frame(Model = &quot;Gradient Boosting&quot;, Accuracy = round(pred.gbm.cm$overall[&#39;Accuracy&#39;], 3))
-# pred.gbm.cm$overall[&#39;Accuracy&#39;]
-# pred.gbm.cm$table</code></pre>
+df.metrics.gbm &lt;- data.frame(Model = &quot;Gradient Boosting&quot;, Accuracy = round(pred.gbm.cm$overall[&#39;Accuracy&#39;], 3))</code></pre>
 </div>
 </div>
 <div id="random-forrest---caret-package" class="section level3">
@@ -765,7 +806,26 @@ df.metrics.gbm &lt;- data.frame(Model = &quot;Gradient Boosting&quot;, Accuracy 
 mdl.rfc &lt;- train(classe ~ ., data = Train, 
                  method = &quot;rf&quot;, 
                  trControl = fitControl,
-                 verbose = FALSE)</code></pre>
+                 verbose = FALSE)
+mdl.rfc </code></pre>
+<pre><code>## Random Forest 
+## 
+## 15699 samples
+##    31 predictor
+##     5 classes: &#39;A&#39;, &#39;B&#39;, &#39;C&#39;, &#39;D&#39;, &#39;E&#39; 
+## 
+## No pre-processing
+## Resampling: Cross-Validated (10 fold) 
+## Summary of sample sizes: 14129, 14129, 14128, 14131, 14129, 14131, ... 
+## Resampling results across tuning parameters:
+## 
+##   mtry  Accuracy   Kappa    
+##    2    0.9931842  0.9913780
+##   16    0.9911457  0.9887996
+##   31    0.9815273  0.9766325
+## 
+## Accuracy was used to select the optimal model using the largest value.
+## The final value used for the model was mtry = 2.</code></pre>
 <div id="cross-validation-2" class="section level4">
 <h4>Cross Validation</h4>
 <pre class="r"><code>pred.rfc &lt;- predict(mdl.rfc, Test)
@@ -778,7 +838,23 @@ df.metrics.rfc &lt;- data.frame(Model = &quot;Random Forest - CARET&quot;, Accur
 <div id="random-forest---randomforest-package" class="section level3">
 <h3>Random Forest - randomForest Package</h3>
 <pre class="r"><code># Create a Random Forest model with default parameters
-mdl.random.for &lt;- randomForest::randomForest(classe ~ ., data = Train)</code></pre>
+mdl.random.for &lt;- randomForest::randomForest(classe ~ ., data = Train)
+mdl.random.for</code></pre>
+<pre><code>## 
+## Call:
+##  randomForest(formula = classe ~ ., data = Train) 
+##                Type of random forest: classification
+##                      Number of trees: 500
+## No. of variables tried at each split: 5
+## 
+##         OOB estimate of  error rate: 0.61%
+## Confusion matrix:
+##      A    B    C    D    E class.error
+## A 4461    2    0    0    1 0.000672043
+## B   15 3013    8    0    2 0.008229098
+## C    0   16 2702   19    1 0.013148283
+## D    0    0   24 2546    3 0.010493587
+## E    0    0    2    2 2882 0.001386001</code></pre>
 <div id="cross-validation-3" class="section level4">
 <h4>Cross Validation</h4>
 <pre class="r"><code>pred.rf &lt;- predict(mdl.random.for, Test, type = &quot;class&quot;)
