@@ -388,14 +388,13 @@ summary {
 <li>Removing highly correlated values using the <code>findCorrelation</code> function.</li>
 </ol>
 <p>Imputation was not required since the NA threshold of 95% removed all missing values in the data.</p>
-<p>Four models were tested:</p>
+<p>Three models were tested:</p>
 <ol style="list-style-type: decimal">
 <li>Gradient Boosting using the <code>caret</code> package</li>
-<li>Random Forest using the <code>caret</code> package</li>
 <li>Random Forest using the <code>randomForest</code> package</li>
 <li>Linear Discriminant Analysis using the <code>caret</code> package.</li>
 </ol>
-<p>Of the four modelling techniques, the Random Forrest approach provided the highest accuracy and was used for the final graded assessment. The random forest model developed with the <code>randomForest</code> package performed the best overall.</p>
+<p>Of the three modelling techniques, the Random Forrest approach provided the highest accuracy and was used for the final graded assessment. The random forest model developed with the <code>randomForest</code> package performed the best overall with the lowest Out-of-Sample error (equal to 1-Accuracy) using K-fold Cross Validation.</p>
 <p>Parallel processing techniques using the <code>doParallel</code> package were adopted to speed up computations which proved particularly useful for Gradient Boosting methods.</p>
 </div>
 <div id="background" class="section level2">
@@ -442,7 +441,7 @@ library(randomForest)</code></pre>
                         Observations = c(dim(train.df)[1], dim(test.df)[1]),
                         Variables = c(dim(train.df)[2], dim(test.df)[2]))</code></pre>
 <p>The following table shows the number of variables and observations as dimensions for each of the data sets:</p>
-<pre class="r"><code>kable(data.dims)%&gt;%
+<pre class="r"><code>kable(data.dims) %&gt;%
   kable_styling(bootstrap_options = c(&quot;striped&quot;, &quot;hover&quot;, &quot;condensed&quot;))</code></pre>
 <table class="table table-striped table-hover table-condensed" style="margin-left: auto; margin-right: auto;">
 <thead>
@@ -752,7 +751,9 @@ mdl.lda</code></pre>
 
 pred.lda.cm &lt;- confusionMatrix(pred.lda, Test$classe)
 
-df.metrics.lda &lt;- data.frame(Model = &quot;Linear Discriminant Analysis&quot;, Accuracy = round(pred.lda.cm$overall[&#39;Accuracy&#39;], 3))</code></pre>
+df.metrics.lda &lt;- data.frame(Model = &quot;Linear Discriminant Analysis&quot;, 
+                             Accuracy = round(pred.lda.cm$overall[&#39;Accuracy&#39;], 3), 
+                             oos.error = 1 - round(pred.lda.cm$overall[&#39;Accuracy&#39;], 3))</code></pre>
 </div>
 </div>
 <div id="gradient-boosting---caret-package" class="section level3">
@@ -797,42 +798,9 @@ mdl.gbm</code></pre>
 
 pred.gbm.cm &lt;- confusionMatrix(pred.gbm, Test$classe)
 
-df.metrics.gbm &lt;- data.frame(Model = &quot;Gradient Boosting&quot;, Accuracy = round(pred.gbm.cm$overall[&#39;Accuracy&#39;], 3))</code></pre>
-</div>
-</div>
-<div id="random-forrest---caret-package" class="section level3">
-<h3>Random Forrest - CARET Package</h3>
-<pre class="r"><code>set.seed(825)
-mdl.rfc &lt;- train(classe ~ ., data = Train, 
-                 method = &quot;rf&quot;, 
-                 trControl = fitControl,
-                 verbose = FALSE)
-mdl.rfc </code></pre>
-<pre><code>## Random Forest 
-## 
-## 15699 samples
-##    31 predictor
-##     5 classes: &#39;A&#39;, &#39;B&#39;, &#39;C&#39;, &#39;D&#39;, &#39;E&#39; 
-## 
-## No pre-processing
-## Resampling: Cross-Validated (10 fold) 
-## Summary of sample sizes: 14129, 14129, 14128, 14131, 14129, 14131, ... 
-## Resampling results across tuning parameters:
-## 
-##   mtry  Accuracy   Kappa    
-##    2    0.9931842  0.9913780
-##   16    0.9911457  0.9887996
-##   31    0.9815273  0.9766325
-## 
-## Accuracy was used to select the optimal model using the largest value.
-## The final value used for the model was mtry = 2.</code></pre>
-<div id="cross-validation-2" class="section level4">
-<h4>Cross Validation</h4>
-<pre class="r"><code>pred.rfc &lt;- predict(mdl.rfc, Test)
-
-pred.rfc.cm &lt;- confusionMatrix(pred.rfc, Test$classe)
-
-df.metrics.rfc &lt;- data.frame(Model = &quot;Random Forest - CARET&quot;, Accuracy = round(pred.rfc.cm$overall[&#39;Accuracy&#39;], 3))</code></pre>
+df.metrics.gbm &lt;- data.frame(Model = &quot;Gradient Boosting&quot;, 
+                             Accuracy = round(pred.gbm.cm$overall[&#39;Accuracy&#39;], 3), 
+                             oos.error =  1 - round(pred.gbm.cm$overall[&#39;Accuracy&#39;], 3))</code></pre>
 </div>
 </div>
 <div id="random-forest---randomforest-package" class="section level3">
@@ -850,29 +818,32 @@ mdl.random.for</code></pre>
 ##         OOB estimate of  error rate: 0.61%
 ## Confusion matrix:
 ##      A    B    C    D    E class.error
-## A 4461    2    0    0    1 0.000672043
-## B   15 3013    8    0    2 0.008229098
-## C    0   16 2702   19    1 0.013148283
-## D    0    0   24 2546    3 0.010493587
-## E    0    0    2    2 2882 0.001386001</code></pre>
-<div id="cross-validation-3" class="section level4">
+## A 4459    5    0    0    0 0.001120072
+## B   15 3013    6    0    4 0.008229098
+## C    0   17 2707   14    0 0.011322133
+## D    0    0   27 2543    3 0.011659541
+## E    0    0    3    1 2882 0.001386001</code></pre>
+<div id="cross-validation-2" class="section level4">
 <h4>Cross Validation</h4>
 <pre class="r"><code>pred.rf &lt;- predict(mdl.random.for, Test, type = &quot;class&quot;)
 
 pred.randForr.cm &lt;- confusionMatrix(pred.rf, Test$classe)
 
-df.metrics.rand &lt;- data.frame(Model = &quot;Random Forest&quot;, Accuracy = round(pred.randForr.cm$overall[&#39;Accuracy&#39;], 3))</code></pre>
+df.metrics.rand &lt;- data.frame(Model = &quot;Random Forest&quot;, 
+                              Accuracy = round(pred.randForr.cm$overall[&#39;Accuracy&#39;], 3), 
+                              oos.error = 1- round(pred.randForr.cm$overall[&#39;Accuracy&#39;], 3))</code></pre>
 </div>
 </div>
 </div>
-<div id="compare-models" class="section level2">
-<h2>Compare Models</h2>
-<p>The cross validated accuracies of each of the models is compared in the following table:</p>
-<pre class="r"><code>df.comparison &lt;- rbind(df.metrics.gbm, df.metrics.rfc, df.metrics.rand, df.metrics.lda)
+<div id="compare-models---out-of-sample-accuracy" class="section level2">
+<h2>Compare Models - Out of Sample Accuracy</h2>
+<p>The cross validated accuracies of each of the models is compared in the following table to provide the out of sample accuracies:</p>
+<pre class="r"><code>df.comparison &lt;- rbind(df.metrics.gbm, df.metrics.rand, df.metrics.lda)
 row.names(df.comparison) &lt;- NULL
 kable(df.comparison %&gt;%
-  arrange(desc(Accuracy)))</code></pre>
-<table>
+  arrange(desc(Accuracy))) %&gt;%
+  kable_styling(bootstrap_options = c(&quot;striped&quot;, &quot;hover&quot;, &quot;condensed&quot;))</code></pre>
+<table class="table table-striped table-hover table-condensed" style="margin-left: auto; margin-right: auto;">
 <thead>
 <tr>
 <th style="text-align:left;">
@@ -880,6 +851,9 @@ Model
 </th>
 <th style="text-align:right;">
 Accuracy
+</th>
+<th style="text-align:right;">
+oos.error
 </th>
 </tr>
 </thead>
@@ -891,13 +865,8 @@ Random Forest
 <td style="text-align:right;">
 0.994
 </td>
-</tr>
-<tr>
-<td style="text-align:left;">
-Random Forest - CARET
-</td>
 <td style="text-align:right;">
-0.992
+0.006
 </td>
 </tr>
 <tr>
@@ -907,6 +876,9 @@ Gradient Boosting
 <td style="text-align:right;">
 0.947
 </td>
+<td style="text-align:right;">
+0.053
+</td>
 </tr>
 <tr>
 <td style="text-align:left;">
@@ -915,10 +887,13 @@ Linear Discriminant Analysis
 <td style="text-align:right;">
 0.583
 </td>
+<td style="text-align:right;">
+0.417
+</td>
 </tr>
 </tbody>
 </table>
-<p>Based on the above table the Random Forrest model from the <code>randomForest</code> package yeilds the highest accuracy and will be used in the final predictions for the quiz.</p>
+<p>Based on the above table the Random Forrest model from the <code>randomForest</code> package yeilds the highest out of sample accuracy and will be used in the final predictions for the quiz.</p>
 <pre class="r"><code># Export the final model for later reuse and time saving
 saveRDS(mdl.random.for, &quot;randomForest_Final.rds&quot;)</code></pre>
 </div>
