@@ -1,0 +1,366 @@
+---
+title: "Week 4 Assignment - HAR Predictions"
+author: "Nick"
+date: "12/11/2019"
+output: html_document
+---
+
+
+## Executive Summary
+
+This assignment models the Human Activity Recognition (HAR) data for Weight Lifting Exercises to predict the class of exercise.
+
+The following methods were used to investigate and clean the data set including:
+
+1. Identifying and processing missing values using by selecting a NA value threshold of 95%
+2. Removing highly correlated values using the `findCorrelation` function.
+
+Imputation was not required since the NA threshold of 95% removed all missing values in the data.
+
+Four models were tested:
+
+1. Gradient Boosting using the `caret` package
+2. Random Forest using the `caret` package
+3. Random Forest using the `randomForest` package
+4. Linear Discriminant Analysis using the `caret` package.
+
+Of the four modelling techniques, the Random Forrest approach provided the highest accuracy and was used for the final graded assessment. The random forest model developed with the `randomForest` package performed the best overall.
+
+Parallel processing techniques using the `doParallel` package were adopted to speed up computations which proved particularly useful for Gradient Boosting methods.
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively.
+
+These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health or to find patterns in their behavior. 
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. Six study participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+The goal of this project is to analyse data from the accelerometers on the belt, forearm, arm, and dumbell of 6 participants and predict the class of exercise being undertaken.
+
+More information relating to the study is available [here](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har).
+
+Further information is available in the technical paper:
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+
+## Parallel Processing
+Following a Coursera Mentor's post at the link below, parallel processing was enabled to significantly improve processing performance during the model building stage.
+
+Link to tutorial: https://github.com/lgreski/datasciencectacontent/blob/master/markdown/pml-randomForestPerformance.md.
+
+```{r ParProc, message=FALSE, warning=FALSE}
+library(parallel)
+library(doParallel)
+cluster <- makeCluster(detectCores() - 1) # convention to leave 1 core for OS
+registerDoParallel(cluster)
+```
+
+## Import Data
+
+```{r RunLibs, message=FALSE, warning=FALSE}
+library(readr)
+library(dplyr)
+library(caret)
+library(e1071)
+library(kableExtra)
+library(randomForest)
+```
+
+
+```{r GetData}
+
+  # The data has been divided into test and training sets as follows:
+  train.url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  test.url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  
+  # To improve the speed of rmarkdown, check if the data has already been loaded into the env:
+  if (!exists("train.df")) {
+    train.df <- read.csv(url(train.url), stringsAsFactors = FALSE)
+  }
+  if (!exists("test.df")) {
+    test.df <- read.csv(url(test.url), stringsAsFactors = FALSE)
+  }
+  
+```
+
+# Data Pre-Processing
+
+```{r}
+data.dims <- data.frame(Dataset = c("train", "test"),
+                        Observations = c(dim(train.df)[1], dim(test.df)[1]),
+                        Variables = c(dim(train.df)[2], dim(test.df)[2]))
+```
+
+The following table shows the number of variables and observations as dimensions for each of the data sets:
+
+```{r ShowNDims1}
+kable(data.dims)%>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+```{r MakeFactor}
+# Ensure the dependant variable is a factor for modelling
+train.df$classe <- as.factor(train.df$classe)
+```
+
+### Variable Formatting
+
+There are `r length(which(unlist(lapply(train.df, is.character))==TRUE))` columns that are character formatted. We will now investigate these.
+
+```{r CheckCharacterTrain, warning=FALSE}
+# Identify character columns
+char.col <- data.frame((train.df[, (which(unlist(lapply(train.df, is.character))==TRUE))]))
+num.col <- data.frame((train.df[, (which(unlist(lapply(train.df, is.numeric))==TRUE))]))
+# Show the variable names for character formatted columns
+names(data.frame((train.df[, (which(unlist(lapply(train.df, is.character))==TRUE))])))
+```
+Next, the character variables are formatted to numeric except for the first three which should remain character formatted. The data is then checked for completeness.
+```{r message=FALSE, warning=FALSE}
+# Remove the Name and Dates variables.
+char.col <- char.col[, -c(1:3)]
+
+# Set the values to numeric
+for (i in 1:ncol(char.col)) {
+  char.col[, i] <- as.numeric(char.col[, i])
+}
+# round(sum(is.na(char.col))/prod(dim(char.col)), 2)
+na_val_col <- sapply(char.col, 
+                     function(x) mean(is.na(x))) > 0.95
+```
+All of the newly formatted columns contain >95% NA values and can therefore be excluded from the training and testing data set. Imputing these values would not be an accurate approach in this case.
+
+```{r MergeData}
+# Remove columns 1-7 and the previously identified columns: 
+train.df <- train.df %>%
+  select(-c(1:7, names(char.col)))
+
+train.names <- train.df %>%
+  select(-classe)
+# Ensure the test set matches the training. The difference is the missing 'classe' dependant variable which is replaced by 'problem_id'.
+test.df <- test.df %>%
+  select(c(names(train.names)), problem_id)
+
+data.dims <- data.frame(Dataset = c("train", "test"),
+                        Observations = c(dim(train.df)[1], dim(test.df)[1]),
+                        Variables = c(dim(train.df)[2], dim(test.df)[2]))
+
+
+```
+
+```{r ShowNDims2}
+kable(data.dims) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+### Missing Values
+The remaining data set is assessed for completeness in this section.
+
+```{r CheckNA}
+# Determine ratio of NA values
+na_val_col <- sapply(train.df, 
+                     function(x) mean(is.na(x))) > 0.95
+
+na.vals <- names(which(na_val_col==TRUE))
+
+round(sum(is.na(train.df))/prod(dim(train.df)), 2)
+```
+
+There are `r round(sum(is.na(train.df))/prod(dim(train.df)), 2) * 100`% NA values in the data set. There are `r length(na.vals)` variables with >=95% NA values and are listed in the following table.
+
+```{r ShowNA}
+na.vals
+```
+
+```{r RemoveNA}
+
+# remove variables with > 95% NA values
+na_val_col <- sapply(train.df, 
+                     function(x) mean(is.na(x))) > 0.95
+# Remove NA
+train.df <- train.df[, na_val_col == FALSE] # Apply the filter
+test.df <- test.df[, na_val_col == FALSE]
+
+data.dims <- data.frame(Dataset = c("train", "test"),
+                        Observations = c(dim(train.df)[1], dim(test.df)[1]),
+                        Variables = c(dim(train.df)[2], dim(test.df)[2]))
+
+round(sum(is.na(train.df))/prod(dim(train.df)), 2)
+```
+
+Once the high proportion NA values are removed there are no further missing values.
+
+```{r ShowNDims3}
+kable(data.dims) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+### Identify Correlations
+Predictor correlation is assessed using the original data.
+
+```{r Corr1}
+  # Remove the dependant/outcome variable "Classe" in last column (=ncol).
+  descrCor <-  cor(na.omit(train.df[, -c(ncol(train.df))])) 
+  summary(descrCor[upper.tri(descrCor)])
+```
+
+The existing data has a correlation range of between `r round(summary(descrCor[upper.tri(descrCor)])['Min.'], 2)` and `r round(summary(descrCor[upper.tri(descrCor)])['Max.'], 2)`. In most cases, the strong correlations relate to the standard deviation observations of the sensors which makes sense.
+
+These predictors can be removed using a threshold correlation cutoff of 0.75. 
+
+```{r Corr2}
+  # Find higly correlated predictors stronger than 0.75
+  highlyCorDescr <- findCorrelation(descrCor, cutoff = .75) 
+  # remove the highly correlated predictors. The Independant varaible is also removed as it is not numeric
+  train.df.cor <- train.df[,-c(highlyCorDescr, ncol(train.df))] 
+  descrCor2 <- cor(na.omit(train.df.cor))
+  summary(descrCor2[upper.tri(descrCor2)])
+  
+  train.df.cor$classe <- train.df$classe # Add the dependant variable back in
+  train.df <- train.df.cor
+```
+
+The revised correlation are now between `r round(summary(descrCor2[upper.tri(descrCor2)])['Min.'], 2)` and `r round(summary(descrCor2[upper.tri(descrCor2)])['Max.'], 2)`.
+
+## Modelling
+
+### Split the Data
+
+```{r Partitioning}
+# Create test and train sets since the original 'test' set is missing the Classe Variable, we cannot do cross validation.
+set.seed(3456)
+
+trainIndex <- createDataPartition(train.df$classe, p = .8, 
+                                  list = FALSE, 
+                                  times = 1)
+
+Train <- train.df[ trainIndex,]
+Test  <- train.df[-trainIndex,]
+
+```
+
+### Model Parameters for Caret Models
+```{r Parameters}
+fitControl <- trainControl(## 10-fold CV
+                           method = "cv",
+                           number = 10,
+                           allowParallel = TRUE)
+```
+
+### Linear Discriminant Analysis (LDA) - CARET Package
+
+```{r LDAModel}
+set.seed(825)
+mdl.lda <- train(classe ~ ., data = Train, 
+                 method = "lda", 
+                 trControl = fitControl,
+                 verbose = FALSE)
+```
+#### Cross Validation
+```{r}
+pred.lda <- predict(mdl.lda, Test)
+
+pred.lda.cm <- confusionMatrix(pred.lda, Test$classe)
+
+df.metrics.lda <- data.frame(Model = "Linear Discriminant Analysis", Accuracy = round(pred.lda.cm$overall['Accuracy'], 3))
+```
+
+
+### Gradient Boosting - CARET Package
+
+```{r gmbModel}
+set.seed(825)
+mdl.gbm <- train(classe ~ ., data = Train, 
+                 method = "gbm", 
+                 trControl = fitControl,
+                 verbose = FALSE)
+# mdl.gbm
+```
+#### Cross Validation
+```{r}
+pred.gbm <- predict(mdl.gbm, Test)
+
+pred.gbm.cm <- confusionMatrix(pred.gbm, Test$classe)
+
+df.metrics.gbm <- data.frame(Model = "Gradient Boosting", Accuracy = round(pred.gbm.cm$overall['Accuracy'], 3))
+# pred.gbm.cm$overall['Accuracy']
+# pred.gbm.cm$table
+```
+
+### Random Forrest - CARET Package
+
+```{r rfcModel}
+set.seed(825)
+mdl.rfc <- train(classe ~ ., data = Train, 
+                 method = "rf", 
+                 trControl = fitControl,
+                 verbose = FALSE)
+```
+#### Cross Validation
+```{r}
+pred.rfc <- predict(mdl.rfc, Test)
+
+pred.rfc.cm <- confusionMatrix(pred.rfc, Test$classe)
+
+df.metrics.rfc <- data.frame(Model = "Random Forest - CARET", Accuracy = round(pred.rfc.cm$overall['Accuracy'], 3))
+```
+
+
+### Random Forest - randomForest Package
+
+```{r randomForestModel}
+# Create a Random Forest model with default parameters
+mdl.random.for <- randomForest::randomForest(classe ~ ., data = Train)
+```
+#### Cross Validation
+```{r}
+pred.rf <- predict(mdl.random.for, Test, type = "class")
+
+pred.randForr.cm <- confusionMatrix(pred.rf, Test$classe)
+
+df.metrics.rand <- data.frame(Model = "Random Forest", Accuracy = round(pred.randForr.cm$overall['Accuracy'], 3))
+```
+
+## Compare Models
+The cross validated accuracies of each of the models is compared in the following table:
+
+```{r Comparison}
+df.comparison <- rbind(df.metrics.gbm, df.metrics.rfc, df.metrics.rand, df.metrics.lda)
+row.names(df.comparison) <- NULL
+kable(df.comparison %>%
+  arrange(desc(Accuracy)))
+```
+
+Based on the above table the Random Forrest model from the `randomForest` package yeilds the highest accuracy and will be used in the final predictions for the quiz.
+```{r}
+# Export the final model for later reuse and time saving
+saveRDS(mdl.random.for, "randomForest_Final.rds")
+```
+
+## De-register Parallel Processing Cluster
+
+```{r}
+stopCluster(cluster)
+registerDoSEQ()
+```
+
+## Final Quiz
+The Random Forrest model generated using the `randomForest` package is used to predict the Class of exercise using the original testing data. These predictions will then be used answer the final quiz. 
+
+The following table shows the prediction against the Problem ID.
+
+```{r}
+# Read in the final model
+mdl.random.for <- readRDS("randomForest_Final.rds")
+
+pred.rf.final <- predict(mdl.random.for, test.df)
+# Checking classification accuracy
+
+test.predictions <- data.frame(Problem_id = 1:20,
+                               Prediction = pred.rf.final
+                               )
+row.names(test.predictions) <- NULL
+
+kable(test.predictions) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
